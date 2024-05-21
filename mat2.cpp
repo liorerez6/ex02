@@ -96,7 +96,7 @@ void* serverLoop(void* arg) {
 
     pthread_mutex_lock(&blockchain_mutex);
 
-    BlockForHash genesisBlock1(0, time(NULL), 0, 3, 1, 0);
+    BlockForHash genesisBlock1(0, time(NULL), 0, g_Difficulty, 1, 0);
     genesisBlock1.updateTimestamp();
     Block genesisBlock(genesisBlock1, 0);
 
@@ -110,12 +110,12 @@ void* serverLoop(void* arg) {
         pthread_cond_wait(&newBlockCreated, &blockchain_mutex); // waiting for new Block
         if(proofOfWork(testingBlock))
         {
-            cout << "\n\nminer ID: " << testingBlock.m_Block.relayed_by << "\nheight: " << testingBlock.m_Block.height << "\nHash: " << testingBlock.hash << "\n\n\n";
+            cout << "\n\nminer ID: " << testingBlock.m_Block.relayed_by << "\nheight: " << testingBlock.m_Block.height << "\nHash: " << testingBlock.hash << "\nDificil:" << testingBlock.m_Block.difficulty << "\n\n\n";
             blockchain.push_back(testingBlock);
         }
-        if(blockchain.back().m_Block.height % 50 == 0)
+        if(blockchain.back().m_Block.height % 10 == 0)
         {
-            
+            g_Difficulty++;
         }
         
     }
@@ -125,23 +125,27 @@ void* serverLoop(void* arg) {
 
 
 
+void setNewBlock(Block& i_newBlockForUpdate, int i_MinerId)
+{
+
+        i_newBlockForUpdate.m_Block.height++;
+        i_newBlockForUpdate.m_Block.prev_hash = i_newBlockForUpdate.hash;
+        i_newBlockForUpdate.m_Block.relayed_by = i_MinerId;
+        i_newBlockForUpdate.m_Block.difficulty = g_Difficulty;
+}
+
 
 // Miner thread function
 void* minerLoop(void* arg) {
     // Miner ID
     int minerID = *((int*)arg);
-
-
-
-
     while (true) {
 
         pthread_mutex_lock(&blockchain_mutex);
         Block currentBlock = blockchain.back();
+        setNewBlock(currentBlock, minerID);
         pthread_mutex_unlock(&blockchain_mutex);
-        currentBlock.m_Block.height++;
-        currentBlock.m_Block.prev_hash = currentBlock.hash;
-        currentBlock.m_Block.relayed_by = minerID;
+        
 
         
 
