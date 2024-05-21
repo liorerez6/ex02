@@ -112,10 +112,11 @@ void* serverLoop(void* arg) {
         {
             cout << "\n\nminer ID: " << testingBlock.m_Block.relayed_by << "\nheight: " << testingBlock.m_Block.height << "\nHash: " << testingBlock.hash << "\nDificil:" << testingBlock.m_Block.difficulty << "\n\n\n";
             blockchain.push_back(testingBlock);
-        }
-        if(blockchain.back().m_Block.height % 10 == 0)
-        {
-            g_Difficulty++;
+            
+            if(blockchain.back().m_Block.height % 10 == 0)
+            {
+                g_Difficulty++;
+            }
         }
         
     }
