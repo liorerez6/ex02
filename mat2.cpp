@@ -7,7 +7,7 @@
 
 using namespace std;
 
-int g_Difficulty = 1;
+int g_Difficulty = 1; //TODO change for input
 
 
 
@@ -54,12 +54,16 @@ class Block
 // Define a list to hold blockchain
 list<Block> blockchain;
 
-Block testingBlock; // testing the block if its good --> push to list. 
+list <Block> testingBlock; // testing the block if its good --> push to list. 
 
 // Define mutex for synchronizing access to blockchain
 pthread_mutex_t blockchain_mutex;
 
+pthread_mutex_t blockchain1_mutex;
+
 pthread_cond_t newBlockCreated;
+
+pthread_cond_t waitingForServer;
 
 // Function to calculate CRC32
 uLong calculateCRC32(BlockForHash block) {
@@ -69,62 +73,33 @@ uLong calculateCRC32(BlockForHash block) {
 }
 
 
-bool maskCheckForDifficulty(int i_Difficulty, int i_Crc) {   // true = proper difficulty. false = not good difficulty
+
+bool maskCheckForDifficulty(int i_Difficulty, int i_hash) {   // true = proper difficulty. false = not good difficulty
     // Initialize mask with 1s in the most significant bit and zeros in the rest
      uLong mask = 0xFFFFFFFF;
     mask <<= (32 - i_Difficulty); // 100000000000
-    return (!(mask & i_Crc));
-    // crc - 01239495043 
+    return (!(mask & i_hash));
+    
     
 }
 
-bool proofOfWork(const Block& i_Block)
+bool proofOfWork(const Block& i_Block) //print the error, try catch,see in the example read in the internent
 {
     Block curr = blockchain.back();
     if(curr.m_Block.height >= i_Block.m_Block.height){
+        cout << "miner " << i_Block.m_Block.relayed_by << " gets a head of miner: " << curr.m_Block.relayed_by << endl;
+
         return false;
+        
     }
     int hashOfCRC32 = calculateCRC32(i_Block.m_Block);
+    if(hashOfCRC32 != i_Block.hash)
+    {
+    cout << "Wrong hash for block #" << i_Block.m_Block.height << "by miner " << i_Block.m_Block.relayed_by << ", recived" << i_Block.hash << " but calculated " << hashOfCRC32 << endl;
+    }
     return (maskCheckForDifficulty(i_Block.m_Block.difficulty, hashOfCRC32));
 
 }
-
-
-// Server thread function
-void* serverLoop(void* arg) {
-    // Generate genesis block
-
-    pthread_mutex_lock(&blockchain_mutex);
-
-    BlockForHash genesisBlock1(0, time(NULL), 0, g_Difficulty, 1, 0);
-    genesisBlock1.updateTimestamp();
-    Block genesisBlock(genesisBlock1, 0);
-
-    // Append genesis block to blockchain
-    blockchain.push_back(genesisBlock);
-
-    //pthread_mutex_unlock(&blockchain_mutex);
-
-    while (true) {
-
-        pthread_cond_wait(&newBlockCreated, &blockchain_mutex); // waiting for new Block
-        if(proofOfWork(testingBlock))
-        {
-            cout << "\n\nminer ID: " << testingBlock.m_Block.relayed_by << "\nheight: " << testingBlock.m_Block.height << "\nHash: " << testingBlock.hash << "\nDificil:" << testingBlock.m_Block.difficulty << "\n\n\n";
-            blockchain.push_back(testingBlock);
-            
-            if(blockchain.back().m_Block.height % 10 == 0)
-            {
-                g_Difficulty++;
-            }
-        }
-        
-    }
-
-    return nullptr;
-}
-
-
 
 void setNewBlock(Block& i_newBlockForUpdate, int i_MinerId)
 {
@@ -147,12 +122,6 @@ void* minerLoop(void* arg) {
         setNewBlock(currentBlock, minerID);
         pthread_mutex_unlock(&blockchain_mutex);
         
-
-        
-
-
-
-
         while(true)
         {
 
@@ -162,30 +131,47 @@ void* minerLoop(void* arg) {
             currentBlock.hash = calculateCRC32(currentBlock.m_Block);
             if(maskCheckForDifficulty(currentBlock.m_Block.difficulty, currentBlock.hash) == true)
             {
+                //cout << "Miner #" << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash " << currentBlock.hash << endl;
+                // print miner
                 break;
             }
+            
         
         }
 
+        //pthread_mutex_lock(&blockchain1_mutex);
         pthread_mutex_lock(&blockchain_mutex);
-        testingBlock = currentBlock;
+        cout << "Miner #" << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash "<< currentBlock.hash << endl;
+        testingBlock.push_back(currentBlock);
         pthread_cond_signal(&newBlockCreated);
+        pthread_cond_wait(&waitingForServer, &blockchain_mutex);
+        
         pthread_mutex_unlock(&blockchain_mutex);
+        //pthread_mutex_unlock(&blockchain1_mutex);
+        
 
     }
 
     return nullptr;
 }
 
-int main() {
-    // Create server thread
-    pthread_t server;
-    pthread_create(&server, NULL, serverLoop, NULL);
 
-    pthread_cond_init(&newBlockCreated, NULL);
-    pthread_mutex_init(&blockchain_mutex, NULL);
+// Server thread function
+void* serverLoop(void* arg) {
+    // Generate genesis block
 
-    // Create miner threads
+    pthread_mutex_lock(&blockchain_mutex);
+
+    BlockForHash genesisBlock1(0, time(NULL), 0, g_Difficulty, 1, 0);
+    genesisBlock1.updateTimestamp();
+    Block genesisBlock(genesisBlock1, 0);
+    genesisBlock.m_Block.difficulty = 25;
+
+    // Append genesis block to blockchain
+    blockchain.push_back(genesisBlock);
+
+    //pthread_mutex_unlock(&blockchain_mutex);
+
     const int NUM_MINERS = 4;
     pthread_t miners[NUM_MINERS];
     for (int i = 1; i <= NUM_MINERS; ++i) {
@@ -193,13 +179,67 @@ int main() {
         pthread_create(&miners[i], NULL, minerLoop, minerID);
     }
 
+
+
+    while (true) {
+
+        pthread_cond_wait(&newBlockCreated, &blockchain_mutex); // waiting for new Block
+        
+        for( Block i : testingBlock){
+            if(proofOfWork(i))
+                {
+                    
+                    blockchain.push_back(i);
+                    cout << "Serever: New block added by " << i.m_Block.relayed_by << " with height: " << i.m_Block.height << endl;
+                    //pthread_cond_broadcast(&waitingForServer);
+                    
+                    if(blockchain.back().m_Block.height % 10 == 0) // need to be changed
+                    {
+                        g_Difficulty++;
+                    }
+                }
+        }
+        testingBlock.clear();
+        pthread_cond_broadcast(&waitingForServer);
+        
+    }
+
+    return nullptr;
+}
+
+
+
+
+
+
+
+int main() {
+    // Create server thread
+    pthread_t server;
+    pthread_cond_init(&newBlockCreated, NULL);
+    pthread_mutex_init(&blockchain_mutex, NULL);
+    pthread_cond_init(&waitingForServer, NULL);
+    pthread_mutex_init(&blockchain1_mutex, NULL);
+
+    pthread_create(&server, NULL, serverLoop, NULL);
+
+    
+
+    // Create miner threads
+    // const int NUM_MINERS = 4;
+    // pthread_t miners[NUM_MINERS];
+    // for (int i = 1; i <= NUM_MINERS; ++i) {
+    //     int* minerID = new int(i); // Allocate miner ID dynamically
+    //     pthread_create(&miners[i], NULL, minerLoop, minerID);
+    // }
+
     // Join server thread
     pthread_join(server, NULL);
 
-    // Join miner threads
-    for (int i = 0; i < NUM_MINERS; ++i) {
-        pthread_join(miners[i], NULL);
-    }
+    // // Join miner threads
+    // for (int i = 0; i < NUM_MINERS; ++i) {
+    //     pthread_join(miners[i], NULL);
+    // }
 
     return 0;
 }
