@@ -87,7 +87,7 @@ bool proofOfWork(const Block& i_Block) //print the error, try catch,see in the e
 {
     Block curr = blockchain.back();
     if(curr.m_Block.height >= i_Block.m_Block.height){
-        cout << "miner " << i_Block.m_Block.relayed_by << " gets a head of miner: " << curr.m_Block.relayed_by << endl;
+        cout << "miner " << curr.m_Block.relayed_by << " gets a head of miner: " << i_Block.m_Block.relayed_by << endl;
 
         return false;
         
