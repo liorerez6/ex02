@@ -85,7 +85,7 @@ bool proofOfWork(const Block& i_Block)
 {
     Block curr = blockchain.back();
     if(curr.m_Block.height >= i_Block.m_Block.height){
-        cout << "miner " << curr.m_Block.relayed_by << " gets a head of miner: " << i_Block.m_Block.relayed_by << endl;
+        cout << "Server: Block that accept from Miner " << dec << i_Block.m_Block.relayed_by << " already exist from Miner " << curr.m_Block.relayed_by << endl;
 
         return false;
         
@@ -93,7 +93,8 @@ bool proofOfWork(const Block& i_Block)
     int hashOfCRC32 = calculateCRC32(i_Block.m_Block);
     if(hashOfCRC32 != i_Block.hash)
     {
-    cout << "Wrong hash for block #" << i_Block.m_Block.height << " by miner " << i_Block.m_Block.relayed_by << ", recived" << i_Block.hash << " but calculated " << hashOfCRC32 << endl;
+    cout << "Server: Wrong hash for block #" << dec << i_Block.m_Block.height << " by miner " << i_Block.m_Block.relayed_by << hex << ", recived 0x" << i_Block.hash << " but calculated 0x" << hashOfCRC32 << endl;
+    cout << dec;
     }
     return (maskCheckForDifficulty(i_Block.m_Block.difficulty, hashOfCRC32));
 
@@ -127,7 +128,7 @@ void* testerFunc(void* arg)
         currentBlock.hash = 0xFFFFFFFF; //wrong hash
 
         pthread_mutex_lock(&blockchain_mutex);
-        cout << "Tester Miner #" << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash "<< currentBlock.hash << endl;
+        cout << "Tester Miner #" << dec << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash 0x" << hex << currentBlock.hash << endl;
         testingBlock.push_back(currentBlock);
         pthread_cond_signal(&newBlockCreated);
         pthread_cond_wait(&waitingForServer, &blockchain_mutex);
@@ -169,8 +170,9 @@ void* minerLoop(void* arg) {
         }
 
         pthread_mutex_lock(&blockchain_mutex);
-        cout << "Miner #" << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash ";
+        cout << "Miner #" << dec << currentBlock.m_Block.relayed_by << ": Mined a new block #" << currentBlock.m_Block.height << ", with the hash ";
         cout << "0x" << hex << currentBlock.hash << endl;
+        cout << dec;
         testingBlock.push_back(currentBlock);
         pthread_cond_signal(&newBlockCreated);
         pthread_cond_wait(&waitingForServer, &blockchain_mutex);
@@ -221,7 +223,13 @@ void* serverLoop(void* arg) {
                 {
                     
                     blockchain.push_back(i);
-                    cout << "Serever: New block added by " << i.m_Block.relayed_by << " with height: " << i.m_Block.height << endl;
+                    cout << dec;
+                    cout << "Serever: New block added by " << i.m_Block.relayed_by << ", attributes: height(" << i.m_Block.height << ")" << 
+                    ", timestamp(" << i.m_Block.timestamp << ")" << ", hash("; 
+                    cout << "0x" << hex << i.hash << ")" << ", prev_hash(0x" << i.m_Block.prev_hash << ")";
+                    cout << dec;
+                    cout << ", difficulty(" << i.m_Block.difficulty << ")" << ", nonce(" << i.m_Block.nonce << ")" << endl;
+                    
                     
                 }
         }
